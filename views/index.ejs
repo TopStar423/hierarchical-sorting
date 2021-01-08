@@ -1,0 +1,130 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <title><%= title %></title>
+    <link rel='stylesheet' href='/stylesheets/style.css' />
+  </head>
+  <body>
+    <input type="file" name="inputfile" id="inputfile" />
+    <br>
+
+    <pre id="output"></pre>
+
+    <script type="text/javascript">
+      const sortKeys = (data, metric) => {
+        const keys = Object.keys(data);
+        const totalPos = keys.indexOf('$total');
+        keys.splice(totalPos, 1);
+
+        keys.sort((key1, key2) => {
+          let total1, total2;
+          if (data[key1]['$total']) {
+            total1 = parseFloat(data[key1]['$total'][metric]);
+            total2 = parseFloat(data[key2]['$total'][metric]);
+          } else {
+            total1 = parseFloat(data[key1][metric]);
+            total2 = parseFloat(data[key2][metric]);
+          }
+
+          return total2 - total1;
+        });
+
+        return keys;
+      }
+
+      const recursiveSort = (data, metric) => {
+        const sortedKeys = sortKeys(data, metric);
+
+        if (data[sortedKeys[0]]['$total']) {
+          const totalIdx = data['$total']['pos_idx'];
+          let result = [totalIdx];
+
+          for (const key of sortedKeys) {
+            result = [...result, ...recursiveSort(data[key], metric)];
+          }
+
+          return result;
+        } else {
+          const sortedIdxArr = [data['$total']['pos_idx']];
+          for (const key of sortedKeys) {
+            sortedIdxArr.push(data[key]['pos_idx']);
+          }
+
+          return sortedIdxArr;
+        }
+      }
+
+      const hierarchicalSort = (data, sortMetric) => {
+        const dataArr = data.split('\n');
+        let dataTree = {};
+
+        // Add first line index since first line is always header line that includes property field names and metric field names
+        let sortedData = dataArr[0];
+
+        const header = dataArr[0].split('|');
+        let totalProperties = 0;
+        const metrics = [];
+
+        for (let i = 0; i < header.length; i++) {
+          if (header[i] === `property${i}`) {
+            totalProperties++;
+          } else {
+            metrics.push(header[i].trimEnd());
+          }
+        }
+
+        if (!metrics.includes(sortMetric)) {
+          return `The metric ${sortMetric} does not exist in the data`;
+        }
+
+        for (let i = 1; i < dataArr.length; i++) {
+          const item = dataArr[i].split('|');
+          let dataObj = dataTree;
+          for (let idx = 0; idx < totalProperties; idx++) {
+            if (!dataObj[item[idx]]) {
+              dataObj[item[idx]] = {};
+            }
+
+            dataObj = dataObj[item[idx]];
+
+            if (item[idx] === '$total') {
+              dataObj['pos_idx'] = i;
+              break;
+            }
+
+            if (idx === totalProperties - 1) {
+              dataObj['pos_idx'] = i;
+            }
+          }
+
+          for (let idx = totalProperties; idx < item.length; idx++) {
+            dataObj[metrics[idx - totalProperties]] = item[idx];
+          }
+        }
+
+        const sortedIdx = recursiveSort(dataTree, sortMetric);
+        for (const idx of sortedIdx) {
+          sortedData += '\n' + dataArr[idx];
+        }
+
+        return sortedData;
+
+      }
+
+      document.getElementById('inputfile')
+              .addEventListener('change', function() {
+                const fr = new FileReader();
+
+                fr.onload = function() {
+                  const data_in = fr.result;
+                  const result = hierarchicalSort(data_in, 'net_sales');
+
+                  document.getElementById('output')
+                          .textContent = result;
+                }
+
+                fr.readAsText(this.files[0]);
+              })
+    </script>
+  </body>
+</html>
