@@ -10,7 +10,7 @@
 3. Under the root directory, run
 `npm start`
    
-# how to use
+## how to use
 
 1. Run the app on browser: `http://localhost:3000`
 
